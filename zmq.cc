@@ -64,7 +64,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
 
 	/* Should Have a least a few arguments */
 	if (nrhs < 1)
-		mexErrMsgTxt("Usage: zmq('[subscribe|publish|poll|receive]','[ipc|tcp|pgm]','{name|IP}','PORT')");
+		mexErrMsgTxt("Usage: zmq('[subscribe|publish|publish_connect|poll|receive]','[ipc|tcp|pgm]','{name|IP}','PORT')");
 
 	/* Grab the command string */
 	if ( !(command = mxArrayToString(prhs[0])) )
@@ -131,7 +131,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
 		socket_cnt++;
 	}
 	/* Set up a subscriber */
-	else if( strcmp(command, "subscribe")==0 ){
+	else if( strcmp(command, "subscribe")==0 || strcmp(command, "publish_connect")==0){
 
 		/* Check that we have enough socket spaces available */
 		if( socket_cnt==MAX_SOCKETS )
@@ -157,14 +157,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
 
 		} else if( strcmp(protocol, "tcp")==0 ) {
 			if( nrhs!=4 || !(port_ptr=(double*)mxGetData(prhs[3])) )
-				mexErrMsgTxt("Usage: zmq('subscribe','tcp', 'IP', PORT)");
-			sprintf(zmq_channel, "tcp://%s:%d", channel, (int)port_ptr[0] );
-			/* Connect to the socket */
-			mexPrintf("ZMQMEX: Connecting to {%s}.\n", zmq_channel);
-			if( (sockets[socket_cnt]=zmq_socket(ctx, ZMQ_SUB))==NULL)
-				mexErrMsgTxt("Could not create socket!");
-			zmq_setsockopt( sockets[socket_cnt], ZMQ_SUBSCRIBE, "", 0 );
-			rc = zmq_connect( sockets[socket_cnt], zmq_channel );
+					mexErrMsgTxt("Usage: zmq('[subscribe|publish_connect]','tcp', 'IP', PORT)");
+				sprintf(zmq_channel, "tcp://%s:%d", channel, (int)port_ptr[0] );
+				/* Connect to the socket */
+				mexPrintf("ZMQMEX: Connecting to {%s}.\n", zmq_channel);
+
+				// this is a variation of publish where we are connecting to the socket and not binding (like publish)
+			if( strcmp(command, "publish_connect")==0 ) {
+				if( (sockets[socket_cnt]=zmq_socket(ctx, ZMQ_PUB))==NULL)
+					mexErrMsgTxt("Could not create publish socket!");
+				rc = zmq_connect( sockets[socket_cnt], zmq_channel );
+			} else {
+				if( (sockets[socket_cnt]=zmq_socket(ctx, ZMQ_SUB))==NULL)
+					mexErrMsgTxt("Could not create subscribe socket!");
+				zmq_setsockopt( sockets[socket_cnt], ZMQ_SUBSCRIBE, "", 0 ); // subscribe with a filter that matches anything
+				rc = zmq_connect( sockets[socket_cnt], zmq_channel );
+			}
 			if(rc!=0)
 				mexErrMsgTxt("Could not connect to socket!");
 
